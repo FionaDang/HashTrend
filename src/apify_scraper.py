@@ -1,55 +1,54 @@
-import requests
-import json
 import os
+import json
+import requests
 from dotenv import load_dotenv
 
-# Load environment variables
+# ─── 1) Load env & config ───────────────────────────────────────────────────────
 load_dotenv()
 API_TOKEN = os.getenv("APIFY_API_TOKEN")
+if not API_TOKEN:
+    raise RuntimeError("APIFY_API_TOKEN not set in .env")
 
-# Load config
 with open('config/apify_config.json') as f:
     config = json.load(f)
 
-# Define the API URL for running the scraper
-SCRAPER_URL = f"https://api.apify.com/v2/acts/{config['actorId']}/runs?token={API_TOKEN}"
+ACTOR_ID = config['actorId']        # "apify~instagram-hashtag-scraper"
+BASE_URL = "https://api.apify.com/v2"
+SYNC_URL = f"{BASE_URL}/acts/{ACTOR_ID}/run-sync-get-dataset-items?token={API_TOKEN}"
 
-
-def run_scraper(hashtag):
+# ─── 2) Single-shot sync run + fetch ───────────────────────────────────────────
+def run_and_fetch_sync(hashtag):
     payload = {
-        "input": {
-            "searchType": config["searchType"],      # e.g. "hashtag", "profile" or "location"
-            "search": hashtag,                       # just the raw tag, without the #
-            "resultsLimit": config["maxPosts"],      # max number of posts to fetch
-            "proxy": config["proxy"]
+        "hashtags":     [hashtag],
+        "resultsType":  config.get("resultsType", "posts"),
+        "resultsLimit": config.get("resultsLimit", 100),
     }
-}
-    # Note: actor runs expect the input JSON under "body"
-    response = requests.post(SCRAPER_URL, json=payload)
-    if response.status_code == 201:
-        run_id = response.json()["data"]["id"]
-        print(f"Scraper started (run ID: {run_id})")
-        return run_id
-    else:
-        print("`Error starting scraper:", response.json())
-        return None
+    if config.get("proxy"):
+        payload["proxy"] = config["proxy"]
 
+    print(f"🚀 Running actor synchronously for #{hashtag}...")
+    resp = requests.post(SYNC_URL, json=payload)
 
-def fetch_results(run_id):
-    url = f"https://api.apify.com/v2/acts/{config['actorId']}/runs?token={API_TOKEN}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        with open('data/scraped_data.json', 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"Data saved to data/scraped_data.json")
-    else:
-        print(f"Error fetching results: {response.text}")
+    # Accept both 200 and 201 as “success”
+    if resp.status_code not in (200, 201):
+        print("❌ Error in sync run:", resp.status_code, resp.text)
+        return
 
-# Example usage
+    # The full dataset items are in the response body
+    items = resp.json()
+    print(f"📊 Retrieved {len(items)} items")
+
+    # Save them
+    os.makedirs("data", exist_ok=True)
+    with open("data/scraped_data.json", "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+    print("✅ Saved to data/scraped_data.json")
+    return items
+
+# ─── 3) CLI Entrypoint ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    hashtag = input("Enter a hashtag to scrape: ")
-    run_id = run_scraper(hashtag)
-    if run_id:
-        print("Waiting for the scraper to finish... (around 1-2 mins)")
-        fetch_results(run_id)
+    tag = input("Enter a hashtag to scrape (without #): ").strip()
+    if tag:
+        run_and_fetch_sync(tag)
+    else:
+        print("🔴 No hashtag provided. Exiting.")
