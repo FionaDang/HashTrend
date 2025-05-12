@@ -1,0 +1,9 @@
+{
+  "actorId": "apify~instagram-scraper",
+  "proxy": {
+    "useApifyProxy": true,
+    "apifyProxyGroups": ["RESIDENTIAL"]
+  },
+  "searchType": "hashtag",
+  "maxPosts": 100
+}
