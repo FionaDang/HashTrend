@@ -4,3 +4,5 @@ apify-client
 huggingface_hub python-dotenv
 pydantic
 sentence-transformers
+flask
+flask_cors
