@@ -2,9 +2,12 @@
 
 import os
 import traceback
+from typing import List
 from dotenv import load_dotenv
+from pydantic import BaseModel
 from huggingface_hub import InferenceClient
 
+# ─── Load Hugging Face Token ───────────────────────────────────────────
 load_dotenv()
 HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN:
@@ -15,11 +18,17 @@ client = InferenceClient(
     token=HF_TOKEN
 )
 
-def extract_keywords_llama(prompt, max_keywords=3):
+# ─── Pydantic Result Model ──────────────────────────────────────────────
+class KeywordResult(BaseModel):
+    keywords: List[str]
+
+# ─── Extract Keywords with LLaMA 3 ───────────────────────────────────────
+def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
     system_msg = {
         "role": "system",
         "content": (
-            f"You are an assistant. Extract {max_keywords} relevant keywords from a description."
+            f"You are an assistant. Extract {max_keywords} relevant keywords from a product description. "
+            f"Respond only with a comma-separated list."
         )
     }
     user_msg = {
@@ -37,19 +46,23 @@ def extract_keywords_llama(prompt, max_keywords=3):
         text = resp.choices[0].message.content.strip()
         if not text:
             print("⚠️ Empty response")
-            return []
-        print("🧪 Raw:", repr(text))
-        return [k.strip().lower() for k in text.split(",") if k.strip()]
+            return KeywordResult(keywords=[])
+        print("🧪 Raw response:", repr(text))
+        return KeywordResult(keywords=[k.strip().lower() for k in text.split(",") if k.strip()])
     except Exception as e:
-        print("❌ Error:", e)
+        print("❌ LLaMA 3 API error:", e)
         traceback.print_exc()
-        return []
+        return KeywordResult(keywords=[])
 
+# ─── CLI Entrypoint ─────────────────────────────────────────────────────
 if __name__ == "__main__":
-    prompt = input("💬 Describe product/post: ").strip()
+    prompt = input("💬 Describe your product or post: ").strip()
     if not prompt:
-        print("❌ No input")
+        print("❌ No input provided.")
     else:
-        print("🤖 Extracting keywords...")
-        kws = extract_keywords_llama(prompt)
-        print("🔑 Keywords:", ", ".join(kws) if kws else "None")
+        print("🤖 Extracting keywords using LLaMA 3...")
+        result = extract_keywords_llama(prompt)
+        if result.keywords:
+            print("🔑 Extracted Keywords:", ", ".join(result.keywords))
+        else:
+            print("⚠️ No keywords extracted.")
