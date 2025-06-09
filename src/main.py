@@ -1,51 +1,134 @@
-from keybert import KeyBERT
-from transformers import pipeline
+import os
+import traceback
+from typing import List
+from dotenv import load_dotenv
+from pydantic import BaseModel
+from huggingface_hub import InferenceClient
+from apify_scraper import run_and_fetch_sync
+from trend_analysis import bucket_posts_by_window, compute_top_trends
+from sentence_transformers import SentenceTransformer, util
 
-# Load models once at startup
-kw_model = KeyBERT(model='all-MiniLM-L6-v2')
+# ─── Load Hugging Face Token ───────────────────────────────────────────
+load_dotenv()
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("❌ HF_TOKEN missing in .env")
 
-try:
-    # Load a small LLM for fallback (adjust to your available hardware or use API)
-    llama_pipe = pipeline(
-        "text-generation",
-        model="meta-llama/Llama-2-7b-chat-hf",  # Replace with llama2 if using Hugging Face Inference API
-        device=0  # Set to -1 for CPU, or 0 for GPU
-    )
-except Exception as e:
-    llama_pipe = None
-    print(f"⚠️ LLaMA fallback not available: {e}")
+# ─── Hugging Face LLaMA 3 Chat Client ──────────────────────────────────
+client = InferenceClient(
+    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    token=HF_TOKEN
+)
 
-def extract_keywords(prompt, max_keywords=2):
-    # --- Tier 1: KeyBERT (semantic relevance) ---
-    try:
-        keywords = kw_model.extract_keywords(
-            prompt,
-            keyphrase_ngram_range=(1, 2),
-            stop_words='english',
-            top_n=max_keywords
+# ─── Keyword Result Model ──────────────────────────────────────────────
+class KeywordResult(BaseModel):
+    keywords: List[str]
+
+# ─── Keyword Extractor Using LLaMA 3 ───────────────────────────────────
+def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
+    system_msg = {
+        "role": "system",
+        "content": (
+            f"You are an assistant. Extract {max_keywords} relevant keywords from a product description. "
+            f"Respond only with a comma-separated list."
         )
-        extracted = [kw for kw, _ in keywords if kw.strip()]
-        if extracted:
-            return [k.lower() for k in extracted]
+    }
+    user_msg = {
+        "role": "user",
+        "content": f"Description: \"{prompt}\"\nKeywords:"
+    }
+
+    try:
+        resp = client.chat.completions.create(
+            model=client.model,
+            messages=[system_msg, user_msg],
+            max_tokens=40,
+            temperature=0.7
+        )
+        text = resp.choices[0].message.content.strip()
+        print("🧪 Raw keyword response:", repr(text))
+        return KeywordResult(keywords=[k.strip().lower() for k in text.split(",") if k.strip()])
     except Exception as e:
-        print(f"⚠️ KeyBERT failed: {e}")
+        print("❌ Keyword extraction error:", e)
+        traceback.print_exc()
+        return KeywordResult(keywords=[])
 
-    # --- Tier 2: Fallback to LLaMA-style LLM ---
-    if llama_pipe:
-        print("⏪ Falling back to LLaMA...")
-        try:
-            llm_prompt = (
-                f"Extract {max_keywords} contextually relevant keywords or hashtags "
-                f"from this sentence for marketing analysis:\n\n\"{prompt}\"\n\nKeywords:"
-            )
-            response = llama_pipe(llm_prompt, max_new_tokens=30, do_sample=True)
-            text = response[0]['generated_text']
-            keywords = text.split("Keywords:")[-1].strip().split(',')
-            keywords = [k.strip().lower() for k in keywords if k.strip()]
-            return keywords[:max_keywords]
-        except Exception as e:
-            print(f"❌ LLaMA fallback failed: {e}")
+# ─── Trend Relevance Filtering ─────────────────────────────────────────
+def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold=0.15, debug=True):
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    prompt_embedding = model.encode(prompt, convert_to_tensor=True)
+    filtered = {}
 
-    # Last resort if both fail
-    print("❌ No keywords extracted.")
-    return []
+    # Normalize keywords
+    keywords = [kw.lower() for kw in keywords]
+
+    for tag, stats in trends_dict.items():
+        tag_text = tag.lower()
+
+        # Force-include if tag contains a keyword
+        if any(kw in tag_text for kw in keywords):
+            if debug:
+                print(f"✅ Keeping #{tag} (matched keyword)")
+            filtered[tag] = stats
+            continue
+
+        # Else use semantic similarity
+        tag_embedding = model.encode(tag_text, convert_to_tensor=True)
+        similarity = float(util.cos_sim(prompt_embedding, tag_embedding))
+
+        if debug:
+            print(f"🔍 #{tag.ljust(20)} → similarity: {similarity:.2f}")
+
+        if similarity >= similarity_threshold:
+            filtered[tag] = stats
+
+    return filtered
+
+# ─── Trend Finder Workflow ─────────────────────────────────────────────
+class TrendFinder:
+    def __init__(self, window_minutes=60, top_n=5):
+        self.window_minutes = window_minutes
+        self.top_n = top_n
+
+    def run(self):
+        prompt = input("💬 Describe your product or post: ").strip()
+        if not prompt:
+            print("❌ No input provided.")
+            return
+
+        print("🤖 Extracting keywords using LLaMA 3...")
+        keyword_result = extract_keywords_llama(prompt)
+        keywords = keyword_result.keywords
+        if not keywords:
+            print("⚠️ No keywords extracted.")
+            return
+        print("🔑 Keywords:", ", ".join(keywords))
+
+        all_posts = []
+        for kw in keywords:
+            print(f"🔍 Scraping posts for #{kw}...")
+            posts = run_and_fetch_sync(kw)
+            if posts:
+                all_posts.extend(posts)
+
+        if not all_posts:
+            print("⚠️ No posts found for any keyword.")
+            return
+
+        print(f"📦 Scraped {len(all_posts)} posts. Analyzing trends...")
+        buckets = bucket_posts_by_window(all_posts, window_minutes=self.window_minutes)
+        raw_trends = compute_top_trends(buckets, top_n=15)  # buffer more to allow filtering
+        trends = filter_irrelevant_trends(prompt, raw_trends, keywords=keywords, similarity_threshold=0.2)
+        trends = dict(list(trends.items())[:self.top_n])  # top N after filtering
+
+        print("\n📈 Top Hashtag Trends:")
+        if not trends:
+            print("  (No relevant trends found)")
+        else:
+            for i, (tag, stats) in enumerate(trends.items(), 1):
+                vel = stats['velocity'] if stats['velocity'] is not None else "N/A"
+                print(f" {i}. #{tag} (score={stats['score']}, vol={stats['volume']}, vel={vel})")
+
+# ─── Entrypoint ────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    TrendFinder().run()

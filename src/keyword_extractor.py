@@ -1,5 +1,3 @@
-# keyword_extractor_llama3.py
-
 import os
 import traceback
 from typing import List
