@@ -9,7 +9,10 @@ API_TOKEN = os.getenv("APIFY_API_TOKEN")
 if not API_TOKEN:
     raise RuntimeError("APIFY_API_TOKEN not set in .env")
 
-with open('config/apify_config.json') as f:
+import os
+
+config_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'config', 'apify_config.json'))
+with open(config_path, 'r', encoding='utf-8') as f:
     config = json.load(f)
 
 ACTOR_ID = config['actorId']        # "apify~instagram-hashtag-scraper"
