@@ -1,50 +1,68 @@
 import React, { useState } from "react";
-import { Search, TrendingUp, Hash, Zap, BarChart3, Target, Sparkles } from "lucide-react";
+import { Search, TrendingUp, Hash, Zap, BarChart3, Target, Sparkles, AlertCircle } from "lucide-react";
 
 function TrendAnalyzer() {
   const [prompt, setPrompt] = useState("");
   const [keywords, setKeywords] = useState([]);
   const [trends, setTrends] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setTrends([]);
-  setKeywords([]);
+    e.preventDefault();
+    setLoading(true);
+    setTrends([]);
+    setKeywords([]);
+    setError("");
 
-  try {
-    const response = await fetch("http://localhost:5000/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ prompt }),
-    });
+    try {
+      const response = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
 
-    const data = await response.json();
-    setKeywords(data.keywords || []);
-    setTrends(data.trends || []);
-  } catch (err) {
-    console.error("Error:", err);
-  } finally {
-    setLoading(false);
-  }
-};
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
 
+      const data = await response.json();
+
+      // Transform trends dict to array, handling the backend structure
+      const trendList = Object.entries(data.trends || {}).map(
+        ([tag, stats]) => ({ 
+          tag: tag.startsWith('#') ? tag : `#${tag}`, // Ensure hashtag format
+          ...stats 
+        })
+      );
+
+      setKeywords(data.keywords || []);
+      setTrends(trendList);
+    } catch (err) {
+      console.error("Error:", err);
+      setError(err.message || "Failed to analyze trends. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getScoreColor = (score) => {
-    if (score >= 90) return "text-emerald-400";
-    if (score >= 80) return "text-yellow-400";
-    if (score >= 70) return "text-orange-400";
+    if (score >= 8) return "text-emerald-400";
+    if (score >= 6) return "text-yellow-400";
+    if (score >= 4) return "text-orange-400";
     return "text-red-400";
   };
 
   const getScoreGradient = (score) => {
-    if (score >= 90) return "from-emerald-500 to-green-600";
-    if (score >= 80) return "from-yellow-500 to-orange-500";
-    if (score >= 70) return "from-orange-500 to-red-500";
+    if (score >= 8) return "from-emerald-500 to-green-600";
+    if (score >= 6) return "from-yellow-500 to-orange-500";
+    if (score >= 4) return "from-orange-500 to-red-500";
     return "from-red-500 to-pink-600";
+  };
+
+  // Normalize score for progress bar (score is out of 10)
+  const getProgressWidth = (score) => {
+    return Math.min((score / 10) * 100, 100);
   };
 
   return (
@@ -68,11 +86,11 @@ function TrendAnalyzer() {
             </h1>
           </div>
           <p className="text-xl text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            Discover trending hashtags and optimize your content strategy with AI-powered insights
+            Discover trending hashtags and optimize your content strategy with AI-powered TF-IDF analysis
           </p>
         </div>
 
-        {/* Main Form */}
+        {/* Form */}
         <div className="max-w-4xl mx-auto">
           <div className="mb-12">
             <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
@@ -82,10 +100,10 @@ function TrendAnalyzer() {
                   Describe your product or post
                 </label>
               </div>
-              
+
               <div className="relative">
                 <textarea
-                  placeholder="Tell us about your content, product, or campaign. The more details you provide, the better our AI can analyze trending opportunities..."
+                  placeholder="Tell us about your content, product, or campaign..."
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={6}
@@ -95,7 +113,35 @@ function TrendAnalyzer() {
                   {prompt.length}/1000
                 </div>
               </div>
-              
+
+              {error && (
+                <div className="mt-4 bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center">
+                  <AlertCircle className="w-5 h-5 text-red-400 mr-3 flex-shrink-0" />
+                  <span className="text-red-200">{error}</span>
+                </div>
+              )}
+
+          {/* TF-IDF Info */}
+          {trends.length > 0 && (
+            <div className="max-w-4xl mx-auto mt-8">
+              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+                <div className="flex items-start">
+                  <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
+                    <Sparkles className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-semibold text-blue-200 mb-2">About TF-IDF Analysis</h4>
+                    <p className="text-slate-300 text-sm leading-relaxed">
+                      This score combines <strong className="text-white">term frequency</strong> (how often the hashtag appears) 
+                      with <strong className="text-white">inverse document frequency</strong> (how unique it is across posts), 
+                      giving higher scores to hashtags that are both popular and distinctive.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
               <button
                 type="button"
                 onClick={handleSubmit}
@@ -117,11 +163,9 @@ function TrendAnalyzer() {
             </div>
           </div>
 
-          {/* Results Section */}
+          {/* Results */}
           {(keywords.length > 0 || trends.length > 0) && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-700">
-              
-              {/* Keywords Section */}
               {keywords.length > 0 && (
                 <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
                   <div className="flex items-center mb-6">
@@ -143,16 +187,20 @@ function TrendAnalyzer() {
                 </div>
               )}
 
-              {/* Trends Section */}
               {trends.length > 0 && (
                 <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
-                  <div className="flex items-center mb-8">
-                    <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-2 rounded-xl mr-4">
-                      <BarChart3 className="w-6 h-6" />
+                  <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center">
+                      <div className="bg-gradient-to-r from-emerald-500 to-teal-500 p-2 rounded-xl mr-4">
+                        <BarChart3 className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-2xl font-bold text-white">Top Trending Hashtags</h3>
                     </div>
-                    <h3 className="text-2xl font-bold text-white">Top Trending Hashtags</h3>
+                    <div className="text-sm text-slate-400 bg-slate-800/50 rounded-lg px-3 py-2">
+                      TF-IDF Analysis • {trends.length} results
+                    </div>
                   </div>
-                  
+
                   <div className="grid gap-6">
                     {trends.map((trend, idx) => (
                       <div
@@ -161,55 +209,77 @@ function TrendAnalyzer() {
                       >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center">
-                            <Hash className="w-5 h-5 text-purple-400 mr-2" />
+                            <div className="bg-purple-500/20 rounded-lg p-2 mr-3">
+                              <Hash className="w-5 h-5 text-purple-400" />
+                            </div>
                             <span className="text-xl font-bold text-white">
                               {trend.tag}
+                            </span>
+                            <span className="ml-3 text-sm text-slate-400">
+                              Rank #{idx + 1}
                             </span>
                           </div>
                           <div className={`text-2xl font-bold ${getScoreColor(trend.score)}`}>
                             {trend.score}
                           </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div className="bg-slate-700/50 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-slate-300 text-sm font-medium">Volume</span>
+                              <span className="text-slate-300 text-sm font-medium">Volume (TF)</span>
                               <BarChart3 className="w-4 h-4 text-blue-400" />
                             </div>
                             <div className="text-2xl font-bold text-blue-400">
-                              {trend.volume.toLocaleString()}
+                              {trend.volume?.toLocaleString?.() ?? "-"}
+                            </div>
+                            <div className="text-xs text-slate-400 mt-1">
+                              Total mentions
                             </div>
                           </div>
-                          
+
                           <div className="bg-slate-700/50 rounded-xl p-4">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-slate-300 text-sm font-medium">Velocity</span>
-                              <Zap className="w-4 h-4 text-yellow-400" />
-                            </div>
-                            <div className="text-2xl font-bold text-yellow-400">
-                              {trend.velocity}%
-                            </div>
-                          </div>
-                          
-                          <div className="bg-slate-700/50 rounded-xl p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-slate-300 text-sm font-medium">Trend Score</span>
+                              <span className="text-slate-300 text-sm font-medium">TF-IDF Score</span>
                               <TrendingUp className="w-4 h-4 text-emerald-400" />
                             </div>
                             <div className="w-full bg-slate-600 rounded-full h-3 mb-2">
                               <div
                                 className={`h-3 rounded-full bg-gradient-to-r ${getScoreGradient(trend.score)} transition-all duration-1000`}
-                                style={{ width: `${trend.score}%` }}
+                                style={{ width: `${getProgressWidth(trend.score)}%` }}
                               ></div>
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              Score • Relevance & frequency
                             </div>
                           </div>
                         </div>
+
+
                       </div>
                     ))}
                   </div>
+
+                  {trends.length === 0 && (
+                    <div className="text-center py-12 text-slate-400">
+                      <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg">No trending hashtags found in the analysis.</p>
+                      <p className="text-sm">Try describing your content with more specific details.</p>
+                    </div>
+                  )}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Empty state when no results */}
+          {!loading && trends.length === 0 && keywords.length === 0 && prompt && (
+            <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-12 border border-white/10 shadow-2xl text-center">
+              <div className="text-slate-400 mb-4">
+                <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                <h3 className="text-xl font-semibold mb-2">No results found</h3>
+                <p>Try describing your content in more detail or check your connection.</p>
+              </div>
             </div>
           )}
         </div>

@@ -26,8 +26,8 @@ def run_and_fetch_sync(hashtag):
         "resultsType":  config.get("resultsType", "posts"),
         "resultsLimit": config.get("resultsLimit", 100),
     }
-    if config.get("proxy"):
-        payload["proxy"] = config["proxy"]
+    # if config.get("proxy"):
+    #     payload["proxy"] = config["proxy"]
 
     print(f"🚀 Running actor synchronously for #{hashtag}...")
     resp = requests.post(SYNC_URL, json=payload)

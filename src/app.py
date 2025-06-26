@@ -1,44 +1,142 @@
+import os
+import re
+import time
+import traceback
+import json
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from trend_analysis import bucket_posts_by_window, compute_top_trends
+from dotenv import load_dotenv
+from pydantic import BaseModel
+from huggingface_hub import InferenceClient
 from apify_scraper import run_and_fetch_sync
-from main import extract_keywords_llama, filter_irrelevant_trends
+from trend_analysis import compute_tf_idf_trends
+from sentence_transformers import SentenceTransformer, util
+from concurrent.futures import ThreadPoolExecutor
 
+# ─── Load Hugging Face Token ───────────────────────────────────────────
+load_dotenv()
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise ValueError("❌ HF_TOKEN missing in .env")
+
+client = InferenceClient(
+    model="mistralai/Mixtral-8x7B-Instruct-v0.1",
+    token=HF_TOKEN,
+    provider="hf-inference"
+)
+
+# ─── Keyword Result Model ──────────────────────────────────────────────
+class KeywordResult(BaseModel):
+    keywords: list[str]
+
+def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
+    full_prompt = (
+        f"You are an assistant. Extract {max_keywords} relevant keywords from the product description below.\n"
+        f"Respond only with a comma-separated list.\n\n"
+        f"Description: \"{prompt}\"\nKeywords:"
+    )
+
+    try:
+        response = client.text_generation(prompt=full_prompt, max_new_tokens=40, temperature=0.7)
+        text = response.strip()
+        print("🧪 Raw keyword response:", repr(text))
+        return KeywordResult(keywords=[k.strip().lower() for k in text.split(",") if k.strip()])
+    except Exception as e:
+        print("❌ Keyword extraction error:", e)
+        traceback.print_exc()
+        return KeywordResult(keywords=[])
+
+def sanitize_hashtag(tag: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9_]', '', tag)
+
+def run_and_fetch_cached(hashtag):
+    path = f"data/{hashtag}.json"
+    if os.path.exists(path):
+        with open(path, 'r', encoding='utf-8') as f:
+            print(f"🗂️ Loaded cached #{hashtag}")
+            return json.load(f)
+
+    posts = run_and_fetch_sync(hashtag)
+    if posts:
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(posts, f, ensure_ascii=False, indent=2)
+    return posts or []
+
+def fetch_all_keywords_parallel(keywords):
+    all_posts = []
+    with ThreadPoolExecutor(max_workers=min(5, len(keywords))) as executor:
+        futures = [executor.submit(run_and_fetch_cached, sanitize_hashtag(kw)) for kw in keywords]
+        for f in futures:
+            posts = f.result()
+            if posts:
+                all_posts.extend(posts)
+    return all_posts
+
+def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold=0.15, debug=True):
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    prompt_embedding = model.encode(prompt, convert_to_tensor=True)
+    filtered = {}
+
+    keywords = [kw.lower() for kw in keywords]
+
+    for tag, stats in trends_dict.items():
+        tag_text = tag.lower()
+        if any(kw in tag_text for kw in keywords):
+            if debug:
+                print(f"✅ Keeping #{tag} (matched keyword)")
+            filtered[tag] = stats
+            continue
+
+        tag_embedding = model.encode(tag_text, convert_to_tensor=True)
+        similarity = float(util.cos_sim(prompt_embedding, tag_embedding))
+
+        if debug:
+            print(f"🔍 #{tag.ljust(20)} → similarity: {similarity:.2f}")
+
+        if similarity >= similarity_threshold:
+            filtered[tag] = stats
+
+    return filtered
+
+# ─── Flask App ─────────────────────────────────────────────────────────
 app = Flask(__name__)
-CORS(app)  # allow cross-origin requests from React
+CORS(app)
 
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    data = request.get_json()
-    prompt = data.get("prompt", "")
+    try:
+        prompt = request.json.get("prompt", "")
+        if not prompt:
+            return jsonify({"error": "Missing prompt"}), 400
 
-    if not prompt:
-        return jsonify({"error": "Prompt required"}), 400
+        t0 = time.time()
+        keyword_result = extract_keywords_llama(prompt)
+        keywords = keyword_result.keywords
+        print(f"⏱️ Keyword extraction took {time.time() - t0:.2f}s")
 
-    keyword_result = extract_keywords_llama(prompt)
-    keywords = keyword_result.keywords
+        if not keywords:
+            return jsonify({"error": "No keywords extracted"}), 500
 
-    all_posts = []
-    for kw in keywords:
-        posts = run_and_fetch_sync(kw)
-        if posts:
-            all_posts.extend(posts)
+        t1 = time.time()
+        all_posts = fetch_all_keywords_parallel(keywords)
+        print(f"⏱️ Scraping took {time.time() - t1:.2f}s")
 
-    if not all_posts:
-        return jsonify({"trends": [], "keywords": keywords})
+        if not all_posts:
+            return jsonify({"error": "No posts found"}), 404
 
-    buckets = bucket_posts_by_window(all_posts, window_minutes=60)
-    raw_trends = compute_top_trends(buckets, top_n=15)
-    trends = filter_irrelevant_trends(prompt, raw_trends, keywords, similarity_threshold=0.15)
-    top_trends = dict(list(trends.items())[:5])
+        t2 = time.time()
+        raw_trends = compute_tf_idf_trends(all_posts, top_n=15)
+        trends = filter_irrelevant_trends(prompt, raw_trends, keywords=keywords, similarity_threshold=0.2)
+        final_trends = dict(list(trends.items())[:5])
+        print(f"⏱️ Trend analysis took {time.time() - t2:.2f}s")
 
-    return jsonify({
-        "keywords": keywords,
-        "trends": [
-            {"tag": tag, **stats}
-            for tag, stats in top_trends.items()
-        ]
-    })
+        return jsonify({"trends": final_trends})
 
+    except Exception as e:
+        print("❌ Error in /analyze:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Internal server error"}), 500
+
+# ─── Entrypoint ────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(debug=True)
