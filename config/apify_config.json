@@ -1,9 +1,5 @@
 {
   "actorId":       "apify~instagram-hashtag-scraper",
   "resultsType":   "posts",
-  "resultsLimit":  5,
-  "proxy": {
-    "useApifyProxy": true,
-    "apifyProxyGroups": ["RESIDENTIAL"]
-  }
+  "resultsLimit":  3
 }
