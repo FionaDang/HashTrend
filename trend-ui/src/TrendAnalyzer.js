@@ -7,7 +7,14 @@ import {
   BarChart3,
   Target,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  ArrowLeft,
+  ExternalLink,
+  Heart,
+  MessageCircle,
+  Users,
+  Calendar,
+  Eye
 } from "lucide-react";
 
 function TrendAnalyzer() {
@@ -17,6 +24,83 @@ function TrendAnalyzer() {
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [currentView, setCurrentView] = useState('main'); // 'main' or 'hashtag-posts'
+  const [selectedHashtag, setSelectedHashtag] = useState(null);
+  const [instagramPosts, setInstagramPosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
+
+  // Mock Instagram posts data - in a real app, this would come from Instagram API
+  const generateMockPosts = (hashtag) => {
+    const mockPosts = [
+      {
+        id: '1',
+        username: 'travel_enthusiast',
+        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b332c77c?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
+        caption: `Amazing sunset views! ${hashtag} #photography #nature`,
+        likes: 2834,
+        comments: 127,
+        timestamp: '2h',
+        url: `https://instagram.com/p/sample1`
+      },
+      {
+        id: '2',
+        username: 'lifestyle_blogger',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=300&h=300&fit=crop',
+        caption: `Living my best life with ${hashtag} vibes ✨`,
+        likes: 1256,
+        comments: 89,
+        timestamp: '4h',
+        url: `https://instagram.com/p/sample2`
+      },
+      {
+        id: '3',
+        username: 'creative_artist',
+        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1481662875992-05b0bddfae7c?w=300&h=300&fit=crop',
+        caption: `New artwork inspired by ${hashtag} 🎨 #art #creative`,
+        likes: 3421,
+        comments: 234,
+        timestamp: '6h',
+        url: `https://instagram.com/p/sample3`
+      },
+      {
+        id: '4',
+        username: 'food_lover',
+        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300&h=300&fit=crop',
+        caption: `Delicious meal of the day! ${hashtag} #foodie #yummy`,
+        likes: 892,
+        comments: 45,
+        timestamp: '8h',
+        url: `https://instagram.com/p/sample4`
+      },
+      {
+        id: '5',
+        username: 'fitness_guru',
+        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
+        caption: `Morning workout complete! ${hashtag} #fitness #motivation`,
+        likes: 1567,
+        comments: 112,
+        timestamp: '12h',
+        url: `https://instagram.com/p/sample5`
+      },
+      {
+        id: '6',
+        username: 'fashion_style',
+        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=50&h=50&fit=crop&crop=face',
+        image: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=300&h=300&fit=crop',
+        caption: `Today's outfit featuring ${hashtag} style 👗 #fashion #ootd`,
+        likes: 2103,
+        comments: 178,
+        timestamp: '1d',
+        url: `https://instagram.com/p/sample6`
+      }
+    ];
+    return mockPosts;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -55,6 +139,25 @@ function TrendAnalyzer() {
     }
   };
 
+  const handleHashtagClick = async (hashtag) => {
+    setSelectedHashtag(hashtag);
+    setPostsLoading(true);
+    setCurrentView('hashtag-posts');
+    
+    // Simulate API call delay
+    setTimeout(() => {
+      const posts = generateMockPosts(hashtag.tag);
+      setInstagramPosts(posts);
+      setPostsLoading(false);
+    }, 1000);
+  };
+
+  const handleBackToMain = () => {
+    setCurrentView('main');
+    setSelectedHashtag(null);
+    setInstagramPosts([]);
+  };
+
   const getScoreColor = (score) => {
     if (score >= 8) return "text-emerald-400";
     if (score >= 6) return "text-yellow-400";
@@ -72,6 +175,155 @@ function TrendAnalyzer() {
   const getProgressWidth = (score) => {
     return Math.min((score / 10) * 100, 100);
   };
+
+  const formatNumber = (num) => {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return num.toString();
+  };
+
+  if (currentView === 'hashtag-posts') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
+        {/* Animated background */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000"></div>
+        </div>
+
+        <div className="relative z-10 container mx-auto px-6 py-12">
+          {/* Header */}
+          <div className="mb-8">
+            <button
+              onClick={handleBackToMain}
+              className="flex items-center text-purple-400 hover:text-purple-300 transition-colors duration-200 mb-4"
+            >
+              <ArrowLeft className="w-5 h-5 mr-2" />
+              Back to Analysis
+            </button>
+            
+            <div className="flex items-center">
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-3 rounded-2xl mr-4">
+                <Hash className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold text-white">{selectedHashtag?.tag}</h1>
+                <p className="text-slate-300 mt-1">Top Instagram posts • TF-IDF Score: {selectedHashtag?.score}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-6 border border-white/10 shadow-2xl mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="text-3xl font-bold text-purple-400">{formatNumber(selectedHashtag?.volume || 0)}</div>
+                <div className="text-slate-300 text-sm">Total Posts</div>
+              </div>
+              <div className="text-center">
+                <div className={`text-3xl font-bold ${getScoreColor(selectedHashtag?.score || 0)}`}>
+                  {selectedHashtag?.score || 0}
+                </div>
+                <div className="text-slate-300 text-sm">TF-IDF Score</div>
+              </div>
+              <div className="text-center">
+                <div className="text-3xl font-bold text-blue-400">#{trends.findIndex(t => t.tag === selectedHashtag?.tag) + 1}</div>
+                <div className="text-slate-300 text-sm">Trend Rank</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Posts Grid */}
+          {postsLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+                <p className="text-slate-300">Loading Instagram posts...</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {instagramPosts.map((post) => (
+                <div
+                  key={post.id}
+                  className="bg-white/5 backdrop-blur-lg rounded-2xl overflow-hidden border border-white/10 shadow-2xl hover:scale-105 transition-all duration-300 hover:border-purple-500/50"
+                >
+                  {/* Post Header */}
+                  <div className="p-4 flex items-center">
+                    <img
+                      src={post.avatar}
+                      alt={post.username}
+                      className="w-10 h-10 rounded-full mr-3"
+                    />
+                    <div className="flex-1">
+                      <div className="font-semibold text-white">{post.username}</div>
+                      <div className="text-sm text-slate-400">{post.timestamp} ago</div>
+                    </div>
+                  </div>
+
+                  {/* Post Image */}
+                  <div className="aspect-square bg-slate-800">
+                    <img
+                      src={post.image}
+                      alt="Instagram post"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Post Content */}
+                  <div className="p-4">
+                    {/* Engagement */}
+                    <div className="flex items-center space-x-4 mb-3">
+                      <div className="flex items-center text-pink-400">
+                        <Heart className="w-4 h-4 mr-1" />
+                        <span className="text-sm">{formatNumber(post.likes)}</span>
+                      </div>
+                      <div className="flex items-center text-blue-400">
+                        <MessageCircle className="w-4 h-4 mr-1" />
+                        <span className="text-sm">{post.comments}</span>
+                      </div>
+                    </div>
+
+                    {/* Caption */}
+                    <p className="text-slate-200 text-sm mb-4 line-clamp-2">
+                      {post.caption}
+                    </p>
+
+                    {/* View on Instagram Button */}
+                    <a
+                      href={post.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-300 text-sm"
+                    >
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      View on Instagram
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Note about data */}
+          <div className="mt-12 bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+            <div className="flex items-start">
+              <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
+                <Eye className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <h4 className="text-lg font-semibold text-blue-200 mb-2">Demo Data</h4>
+                <p className="text-slate-300 text-sm leading-relaxed">
+                  These are sample Instagram posts for demonstration purposes. In a production app, 
+                  this would connect to the Instagram API to fetch real posts with the selected hashtag.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
@@ -201,7 +453,7 @@ function TrendAnalyzer() {
                       <h3 className="text-2xl font-bold text-white">Top Trending Hashtags</h3>
                     </div>
                     <div className="text-sm text-slate-400 bg-slate-800/50 rounded-lg px-3 py-2">
-                      TF-IDF Analysis • {trends.length} results
+                      TF-IDF Analysis • {trends.length} results • Click to view posts
                     </div>
                   </div>
 
@@ -209,7 +461,8 @@ function TrendAnalyzer() {
                     {trends.map((trend, idx) => (
                       <div
                         key={idx}
-                        className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300 hover:transform hover:scale-102"
+                        onClick={() => handleHashtagClick(trend)}
+                        className="bg-slate-800/50 rounded-2xl p-6 border border-slate-700 hover:border-purple-500/50 transition-all duration-300 hover:transform hover:scale-102 cursor-pointer"
                       >
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center">
@@ -219,7 +472,10 @@ function TrendAnalyzer() {
                             <span className="text-xl font-bold text-white">{trend.tag}</span>
                             <span className="ml-3 text-sm text-slate-400">Rank #{idx + 1}</span>
                           </div>
-                          <div className={`text-2xl font-bold ${getScoreColor(trend.score)}`}>{trend.score}</div>
+                          <div className="flex items-center">
+                            <div className={`text-2xl font-bold ${getScoreColor(trend.score)} mr-3`}>{trend.score}</div>
+                            <ExternalLink className="w-5 h-5 text-purple-400" />
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -248,6 +504,10 @@ function TrendAnalyzer() {
                             <div className="text-xs text-slate-400">Score • Relevance & frequency</div>
                           </div>
                         </div>
+
+                        <div className="text-sm text-purple-300 font-medium">
+                          Click to view top Instagram posts →
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -263,9 +523,13 @@ function TrendAnalyzer() {
                     <h3 className="text-2xl font-bold text-white">Strategy Suggestions</h3>
                   </div>
                   <ul className="list-disc list-inside space-y-2 text-slate-200 text-lg pl-2">
-                    {suggestions.map((tip, idx) => (
-                      <li key={idx}>{tip.replace(/^\d+\.\s*/, "")}</li>
-                    ))}
+                    {suggestions
+                      .flatMap((tip) =>
+                        tip.split(/\d+\.\s+/).filter(Boolean) // Split by "1. ", "2. ", etc.
+                      )
+                      .map((tip, idx) => (
+                        <li key={idx}>{tip.trim()}</li>
+                      ))}
                   </ul>
                 </div>
               )}
