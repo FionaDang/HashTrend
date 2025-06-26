@@ -29,13 +29,13 @@ client = InferenceClient(
 class KeywordResult(BaseModel):
     keywords: list[str]
 
+# ─── Keyword Extractor Using Mixtral ───────────────────────────────────
 def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
     full_prompt = (
         f"You are an assistant. Extract {max_keywords} relevant keywords from the product description below.\n"
         f"Respond only with a comma-separated list.\n\n"
         f"Description: \"{prompt}\"\nKeywords:"
     )
-
     try:
         response = client.text_generation(prompt=full_prompt, max_new_tokens=40, temperature=0.7)
         text = response.strip()
@@ -46,6 +46,25 @@ def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
         traceback.print_exc()
         return KeywordResult(keywords=[])
 
+# ─── Strategy Suggestion Generator ─────────────────────────────────────
+def generate_suggestions(prompt: str, keywords: list[str], trends: list[str], max_suggestions: int = 3) -> list[str]:
+    summary = ", ".join(f"#{tag}" for tag in trends)
+    full_prompt = (
+        f"My content is about: {prompt}. "
+        f"The extracted keywords are: {', '.join(keywords)}. "
+        f"The trending hashtags are: {summary}. "
+        f"Give {max_suggestions} short and clear strategic tips for making content that performs well in this niche. "
+        f"Respond as a list without explanations."
+    )
+    try:
+        response = client.text_generation(prompt=full_prompt, max_new_tokens=120, temperature=0.7)
+        return [line.strip("•- ") for line in response.strip().split("\n") if line]
+    except Exception as e:
+        print("❌ Suggestion generation error:", e)
+        traceback.print_exc()
+        return []
+
+# ─── Helper Utilities ──────────────────────────────────────────────────
 def sanitize_hashtag(tag: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_]', '', tag)
 
@@ -55,7 +74,6 @@ def run_and_fetch_cached(hashtag):
         with open(path, 'r', encoding='utf-8') as f:
             print(f"🗂️ Loaded cached #{hashtag}")
             return json.load(f)
-
     posts = run_and_fetch_sync(hashtag)
     if posts:
         with open(path, 'w', encoding='utf-8') as f:
@@ -76,9 +94,7 @@ def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold
     model = SentenceTransformer('all-MiniLM-L6-v2')
     prompt_embedding = model.encode(prompt, convert_to_tensor=True)
     filtered = {}
-
     keywords = [kw.lower() for kw in keywords]
-
     for tag, stats in trends_dict.items():
         tag_text = tag.lower()
         if any(kw in tag_text for kw in keywords):
@@ -86,16 +102,12 @@ def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold
                 print(f"✅ Keeping #{tag} (matched keyword)")
             filtered[tag] = stats
             continue
-
         tag_embedding = model.encode(tag_text, convert_to_tensor=True)
         similarity = float(util.cos_sim(prompt_embedding, tag_embedding))
-
         if debug:
             print(f"🔍 #{tag.ljust(20)} → similarity: {similarity:.2f}")
-
         if similarity >= similarity_threshold:
             filtered[tag] = stats
-
     return filtered
 
 # ─── Flask App ─────────────────────────────────────────────────────────
@@ -130,7 +142,13 @@ def analyze():
         final_trends = dict(list(trends.items())[:5])
         print(f"⏱️ Trend analysis took {time.time() - t2:.2f}s")
 
-        return jsonify({"trends": final_trends})
+        suggestions = generate_suggestions(prompt, keywords, list(final_trends.keys()))
+
+        return jsonify({
+            "keywords": keywords,
+            "trends": final_trends,
+            "suggestions": suggestions
+        })
 
     except Exception as e:
         print("❌ Error in /analyze:", e)

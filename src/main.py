@@ -47,6 +47,25 @@ def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
         traceback.print_exc()
         return KeywordResult(keywords=[])
 
+# ─── Suggestion Generator Using Mixtral ────────────────────────────────
+def generate_suggestions(prompt: str, keywords: List[str], trends: List[str], max_suggestions: int = 3) -> List[str]:
+    trend_summary = ", ".join(f"#{t}" for t in trends)
+    user_prompt = (
+        f"My content is about: {prompt}. "
+        f"The extracted keywords are: {', '.join(keywords)}. "
+        f"The trending hashtags are: {trend_summary}. "
+        f"Give {max_suggestions} short and clear strategic tips for making content that performs well in this niche. "
+        f"Respond as a list without explanations."
+    )
+
+    try:
+        response = client.text_generation(prompt=user_prompt, max_new_tokens=120, temperature=0.7)
+        return [line.strip("•- ") for line in response.strip().split("\n") if line]
+    except Exception as e:
+        print("❌ Suggestion generation error:", e)
+        traceback.print_exc()
+        return []
+
 # ─── Trend Relevance Filtering ─────────────────────────────────────────
 def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold=0.15, debug=True):
     model = SentenceTransformer('all-MiniLM-L6-v2')
@@ -142,6 +161,14 @@ class TrendFinder:
         else:
             for i, (tag, stats) in enumerate(trends.items(), 1):
                 print(f" {i}. #{tag} (score={stats['score']}, vol={stats['volume']})")
+
+        print("\n💡 Strategy Suggestions:")
+        suggestions = generate_suggestions(prompt, keywords, list(trends.keys()))
+        if suggestions:
+            for i, tip in enumerate(suggestions, 1):
+                print(f" {i}. {tip}")
+        else:
+            print("  (No suggestions generated)")
 
 # ─── Entrypoint ────────────────────────────────────────────────────────
 if __name__ == "__main__":

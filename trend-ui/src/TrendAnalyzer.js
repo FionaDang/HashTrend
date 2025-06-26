@@ -1,10 +1,20 @@
 import React, { useState } from "react";
-import { Search, TrendingUp, Hash, Zap, BarChart3, Target, Sparkles, AlertCircle } from "lucide-react";
+import {
+  Search,
+  TrendingUp,
+  Hash,
+  Zap,
+  BarChart3,
+  Target,
+  Sparkles,
+  AlertCircle
+} from "lucide-react";
 
 function TrendAnalyzer() {
   const [prompt, setPrompt] = useState("");
   const [keywords, setKeywords] = useState([]);
   const [trends, setTrends] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -13,6 +23,7 @@ function TrendAnalyzer() {
     setLoading(true);
     setTrends([]);
     setKeywords([]);
+    setSuggestions([]);
     setError("");
 
     try {
@@ -28,16 +39,14 @@ function TrendAnalyzer() {
 
       const data = await response.json();
 
-      // Transform trends dict to array, handling the backend structure
-      const trendList = Object.entries(data.trends || {}).map(
-        ([tag, stats]) => ({ 
-          tag: tag.startsWith('#') ? tag : `#${tag}`, // Ensure hashtag format
-          ...stats 
-        })
-      );
+      const trendList = Object.entries(data.trends || {}).map(([tag, stats]) => ({
+        tag: tag.startsWith('#') ? tag : `#${tag}`,
+        ...stats
+      }));
 
       setKeywords(data.keywords || []);
       setTrends(trendList);
+      setSuggestions(data.suggestions || []);
     } catch (err) {
       console.error("Error:", err);
       setError(err.message || "Failed to analyze trends. Please try again.");
@@ -60,14 +69,13 @@ function TrendAnalyzer() {
     return "from-red-500 to-pink-600";
   };
 
-  // Normalize score for progress bar (score is out of 10)
   const getProgressWidth = (score) => {
     return Math.min((score / 10) * 100, 100);
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white">
-      {/* Animated background elements */}
+      {/* Animated background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-pulse delay-1000"></div>
@@ -75,7 +83,6 @@ function TrendAnalyzer() {
       </div>
 
       <div className="relative z-10 container mx-auto px-6 py-12">
-        {/* Header */}
         <div className="text-center mb-16">
           <div className="flex items-center justify-center mb-6">
             <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-3 rounded-2xl mr-4">
@@ -90,7 +97,6 @@ function TrendAnalyzer() {
           </p>
         </div>
 
-        {/* Form */}
         <div className="max-w-4xl mx-auto">
           <div className="mb-12">
             <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
@@ -121,26 +127,25 @@ function TrendAnalyzer() {
                 </div>
               )}
 
-          {/* TF-IDF Info */}
-          {trends.length > 0 && (
-            <div className="max-w-4xl mx-auto mt-8">
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-                <div className="flex items-start">
-                  <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
-                    <Sparkles className="w-5 h-5 text-blue-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-semibold text-blue-200 mb-2">About TF-IDF Analysis</h4>
-                    <p className="text-slate-300 text-sm leading-relaxed">
-                      This score combines <strong className="text-white">term frequency</strong> (how often the hashtag appears) 
-                      with <strong className="text-white">inverse document frequency</strong> (how unique it is across posts), 
-                      giving higher scores to hashtags that are both popular and distinctive.
-                    </p>
+              {trends.length > 0 && (
+                <div className="max-w-4xl mx-auto mt-8">
+                  <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+                    <div className="flex items-start">
+                      <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
+                        <Sparkles className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-semibold text-blue-200 mb-2">About TF-IDF Analysis</h4>
+                        <p className="text-slate-300 text-sm leading-relaxed">
+                          This score combines <strong className="text-white">term frequency</strong> (how often the hashtag appears)
+                          with <strong className="text-white">inverse document frequency</strong> (how unique it is across posts),
+                          giving higher scores to hashtags that are both popular and distinctive.
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
+              )}
 
               <button
                 type="button"
@@ -163,8 +168,7 @@ function TrendAnalyzer() {
             </div>
           </div>
 
-          {/* Results */}
-          {(keywords.length > 0 || trends.length > 0) && (
+          {(keywords.length > 0 || trends.length > 0 || suggestions.length > 0) && (
             <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-700">
               {keywords.length > 0 && (
                 <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
@@ -212,16 +216,10 @@ function TrendAnalyzer() {
                             <div className="bg-purple-500/20 rounded-lg p-2 mr-3">
                               <Hash className="w-5 h-5 text-purple-400" />
                             </div>
-                            <span className="text-xl font-bold text-white">
-                              {trend.tag}
-                            </span>
-                            <span className="ml-3 text-sm text-slate-400">
-                              Rank #{idx + 1}
-                            </span>
+                            <span className="text-xl font-bold text-white">{trend.tag}</span>
+                            <span className="ml-3 text-sm text-slate-400">Rank #{idx + 1}</span>
                           </div>
-                          <div className={`text-2xl font-bold ${getScoreColor(trend.score)}`}>
-                            {trend.score}
-                          </div>
+                          <div className={`text-2xl font-bold ${getScoreColor(trend.score)}`}>{trend.score}</div>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -233,9 +231,7 @@ function TrendAnalyzer() {
                             <div className="text-2xl font-bold text-blue-400">
                               {trend.volume?.toLocaleString?.() ?? "-"}
                             </div>
-                            <div className="text-xs text-slate-400 mt-1">
-                              Total mentions
-                            </div>
+                            <div className="text-xs text-slate-400 mt-1">Total mentions</div>
                           </div>
 
                           <div className="bg-slate-700/50 rounded-xl p-4">
@@ -249,37 +245,30 @@ function TrendAnalyzer() {
                                 style={{ width: `${getProgressWidth(trend.score)}%` }}
                               ></div>
                             </div>
-                            <div className="text-xs text-slate-400">
-                              Score • Relevance & frequency
-                            </div>
+                            <div className="text-xs text-slate-400">Score • Relevance & frequency</div>
                           </div>
                         </div>
-
-
                       </div>
                     ))}
                   </div>
-
-                  {trends.length === 0 && (
-                    <div className="text-center py-12 text-slate-400">
-                      <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                      <p className="text-lg">No trending hashtags found in the analysis.</p>
-                      <p className="text-sm">Try describing your content with more specific details.</p>
-                    </div>
-                  )}
                 </div>
               )}
-            </div>
-          )}
 
-          {/* Empty state when no results */}
-          {!loading && trends.length === 0 && keywords.length === 0 && prompt && (
-            <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-12 border border-white/10 shadow-2xl text-center">
-              <div className="text-slate-400 mb-4">
-                <Search className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <h3 className="text-xl font-semibold mb-2">No results found</h3>
-                <p>Try describing your content in more detail or check your connection.</p>
-              </div>
+              {suggestions.length > 0 && (
+                <div className="bg-white/5 backdrop-blur-lg rounded-3xl p-8 border border-white/10 shadow-2xl">
+                  <div className="flex items-center mb-6">
+                    <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-2 rounded-xl mr-4">
+                      <Sparkles className="w-6 h-6 text-pink-200" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-white">Strategy Suggestions</h3>
+                  </div>
+                  <ul className="list-disc list-inside space-y-2 text-slate-200 text-lg pl-2">
+                    {suggestions.map((tip, idx) => (
+                      <li key={idx}>{tip.replace(/^\d+\.\s*/, "")}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>
