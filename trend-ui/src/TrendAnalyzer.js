@@ -67,11 +67,11 @@ function TrendAnalyzer() {
     setError("");
 
     try {
-      const response = await fetch("https://hashtrend.onrender.com", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
+      await fetch("https://hashtrend.onrender.com/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    });
 
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);

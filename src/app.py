@@ -1,19 +1,21 @@
 import os
 import re
 import time
-import requests
-import traceback
 import json
+import traceback
+import requests
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from io import BytesIO
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from huggingface_hub import InferenceClient
-from src.apify_scraper import run_and_fetch_sync
-from src.trend_analysis import compute_tf_idf_trends
 from sentence_transformers import SentenceTransformer, util
 from concurrent.futures import ThreadPoolExecutor
+
+# ─── Load Local Modules ───────────────────────────────────────────────
+from src.apify_scraper import run_and_fetch_sync
+from src.trend_analysis import compute_tf_idf_trends
 
 # ─── Load Hugging Face Token ───────────────────────────────────────────
 load_dotenv()
@@ -27,11 +29,14 @@ client = InferenceClient(
     provider="hf-inference"
 )
 
-# ─── Keyword Result Model ──────────────────────────────────────────────
+# ─── App Setup ─────────────────────────────────────────────────────────
+app = Flask(__name__)
+CORS(app, origins=["https://hashtrend.vercel.app"])  # ⬅ Allow frontend from Vercel only
+
+# ─── Keyword Extraction ───────────────────────────────────────────────
 class KeywordResult(BaseModel):
     keywords: list[str]
 
-# ─── Keyword Extractor Using Mixtral ───────────────────────────────────
 def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
     full_prompt = (
         f"You are an assistant. Extract {max_keywords} relevant keywords from the product description below.\n"
@@ -48,7 +53,7 @@ def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
         traceback.print_exc()
         return KeywordResult(keywords=[])
 
-# ─── Strategy Suggestion Generator ─────────────────────────────────────
+# ─── Strategy Suggestions ─────────────────────────────────────────────
 def generate_suggestions(prompt: str, keywords: list[str], trends: list[str], max_suggestions: int = 3) -> list[str]:
     summary = ", ".join(f"#{tag}" for tag in trends)
     full_prompt = (
@@ -66,13 +71,12 @@ def generate_suggestions(prompt: str, keywords: list[str], trends: list[str], ma
         traceback.print_exc()
         return []
 
-# ─── Helper Utilities ──────────────────────────────────────────────────
+# ─── Helpers ──────────────────────────────────────────────────────────
 def sanitize_hashtag(tag: str) -> str:
     return re.sub(r'[^a-zA-Z0-9_]', '', tag)
 
 def run_and_fetch_cached(hashtag):
     path = f"data/{hashtag}.json"
-
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
             return json.load(f)
@@ -82,7 +86,6 @@ def run_and_fetch_cached(hashtag):
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
     return posts or []
-
 
 def fetch_all_keywords_parallel(keywords):
     all_posts = []
@@ -114,10 +117,7 @@ def filter_irrelevant_trends(prompt, trends_dict, keywords, similarity_threshold
             filtered[tag] = stats
     return filtered
 
-# ─── Flask App ─────────────────────────────────────────────────────────
-app = Flask(__name__)
-CORS(app)
-
+# ─── API Routes ───────────────────────────────────────────────────────
 @app.route("/analyze", methods=["POST"])
 def analyze():
     try:
@@ -163,7 +163,6 @@ def analyze():
 def proxy_image():
     url = request.args.get("url")
     print(f"🔍 Proxying image: {url}")
-
     try:
         resp = requests.get(
             url,
@@ -173,23 +172,16 @@ def proxy_image():
             },
             timeout=5
         )
-
-        print(f"📦 Status: {resp.status_code}, Content-Type: {resp.headers.get('Content-Type')}")
-
         if resp.status_code == 200 and "image" in resp.headers.get("Content-Type", ""):
             return send_file(BytesIO(resp.content), mimetype=resp.headers["Content-Type"])
     except Exception as e:
         print("❌ Image proxy failed:", e)
-
     return '', 404
-
 
 @app.route("/hashtag/<tag>", methods=["GET"])
 def get_hashtag_posts(tag):
     try:
         clean_tag = sanitize_hashtag(tag)
-
-        # Always use cache if available, otherwise trigger scrape
         posts = run_and_fetch_cached(clean_tag)
 
         if not posts:
@@ -201,18 +193,16 @@ def get_hashtag_posts(tag):
             reverse=True
         )
 
-        formatted = []
-        for post in sorted_posts[:6]:
-            formatted.append({
-                "username": post.get("ownerUsername") or post.get("author") or "unknown",
-                "avatarUrl": post.get("profilePicUrl") or "",
-                "caption": post.get("description") or post.get("text") or "",
-                "imageUrl": post.get("displayUrl") or "",
-                "likes": post.get("likes") or 0,
-                "comments": post.get("comments") or 0,
-                "timestamp": post.get("timestamp") or "",
-                "url": post.get("url") or "",
-            })
+        formatted = [{
+            "username": post.get("ownerUsername") or post.get("author") or "unknown",
+            "avatarUrl": post.get("profilePicUrl") or "",
+            "caption": post.get("description") or post.get("text") or "",
+            "imageUrl": post.get("displayUrl") or "",
+            "likes": post.get("likes") or 0,
+            "comments": post.get("comments") or 0,
+            "timestamp": post.get("timestamp") or "",
+            "url": post.get("url") or "",
+        } for post in sorted_posts[:6]]
 
         return jsonify({"posts": formatted})
 
@@ -220,7 +210,7 @@ def get_hashtag_posts(tag):
         print("❌ Error in /hashtag/<tag>:", e)
         traceback.print_exc()
         return jsonify({"error": "Failed to fetch posts"}), 500
-    
+
 # ─── Entrypoint ────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
