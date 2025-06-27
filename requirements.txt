@@ -1,7 +1,8 @@
 requests
 python-dotenv
 apify-client
-huggingface_hub python-dotenv
+huggingface_hub 
+python-dotenv
 pydantic
 sentence-transformers
 flask
