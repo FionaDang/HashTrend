@@ -1,10 +1,12 @@
 import os
 import re
 import time
+import requests
 import traceback
 import json
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from io import BytesIO
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from huggingface_hub import InferenceClient
@@ -70,15 +72,17 @@ def sanitize_hashtag(tag: str) -> str:
 
 def run_and_fetch_cached(hashtag):
     path = f"data/{hashtag}.json"
+
     if os.path.exists(path):
         with open(path, 'r', encoding='utf-8') as f:
-            print(f"🗂️ Loaded cached #{hashtag}")
             return json.load(f)
+
     posts = run_and_fetch_sync(hashtag)
     if posts:
         with open(path, 'w', encoding='utf-8') as f:
             json.dump(posts, f, ensure_ascii=False, indent=2)
     return posts or []
+
 
 def fetch_all_keywords_parallel(keywords):
     all_posts = []
@@ -155,6 +159,68 @@ def analyze():
         traceback.print_exc()
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route("/proxy-image")
+def proxy_image():
+    url = request.args.get("url")
+    print(f"🔍 Proxying image: {url}")
+
+    try:
+        resp = requests.get(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Referer": "https://www.instagram.com/",
+            },
+            timeout=5
+        )
+
+        print(f"📦 Status: {resp.status_code}, Content-Type: {resp.headers.get('Content-Type')}")
+
+        if resp.status_code == 200 and "image" in resp.headers.get("Content-Type", ""):
+            return send_file(BytesIO(resp.content), mimetype=resp.headers["Content-Type"])
+    except Exception as e:
+        print("❌ Image proxy failed:", e)
+
+    return '', 404
+
+
+@app.route("/hashtag/<tag>", methods=["GET"])
+def get_hashtag_posts(tag):
+    try:
+        clean_tag = sanitize_hashtag(tag)
+
+        # Always use cache if available, otherwise trigger scrape
+        posts = run_and_fetch_cached(clean_tag)
+
+        if not posts:
+            return jsonify({"posts": []})
+
+        sorted_posts = sorted(
+            posts,
+            key=lambda p: (p.get("likes", 0) + p.get("comments", 0)),
+            reverse=True
+        )
+
+        formatted = []
+        for post in sorted_posts[:6]:
+            formatted.append({
+                "username": post.get("ownerUsername") or post.get("author") or "unknown",
+                "avatarUrl": post.get("profilePicUrl") or "",
+                "caption": post.get("description") or post.get("text") or "",
+                "imageUrl": post.get("displayUrl") or "",
+                "likes": post.get("likes") or 0,
+                "comments": post.get("comments") or 0,
+                "timestamp": post.get("timestamp") or "",
+                "url": post.get("url") or "",
+            })
+
+        return jsonify({"posts": formatted})
+
+    except Exception as e:
+        print("❌ Error in /hashtag/<tag>:", e)
+        traceback.print_exc()
+        return jsonify({"error": "Failed to fetch posts"}), 500
+    
 # ─── Entrypoint ────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app.run(debug=True)

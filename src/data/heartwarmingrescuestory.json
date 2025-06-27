@@ -1,0 +1,10 @@
+[
+  {
+    "url": "https://www.instagram.com/explore/tags/heartwarmingrescuestory",
+    "requestErrorMessages": [
+      "HTTP 200 undefined"
+    ],
+    "error": "no_items",
+    "errorDescription": "Empty or private data for provided input"
+  }
+]

@@ -3,7 +3,6 @@ import {
   Search,
   TrendingUp,
   Hash,
-  Zap,
   BarChart3,
   Target,
   Sparkles,
@@ -12,8 +11,6 @@ import {
   ExternalLink,
   Heart,
   MessageCircle,
-  Users,
-  Calendar,
   Eye
 } from "lucide-react";
 
@@ -29,77 +26,36 @@ function TrendAnalyzer() {
   const [instagramPosts, setInstagramPosts] = useState([]);
   const [postsLoading, setPostsLoading] = useState(false);
 
-  // Mock Instagram posts data - in a real app, this would come from Instagram API
-  const generateMockPosts = (hashtag) => {
-    const mockPosts = [
-      {
-        id: '1',
-        username: 'travel_enthusiast',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b332c77c?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=300&fit=crop',
-        caption: `Amazing sunset views! ${hashtag} #photography #nature`,
-        likes: 2834,
-        comments: 127,
-        timestamp: '2h',
-        url: `https://instagram.com/p/sample1`
-      },
-      {
-        id: '2',
-        username: 'lifestyle_blogger',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=300&h=300&fit=crop',
-        caption: `Living my best life with ${hashtag} vibes ✨`,
-        likes: 1256,
-        comments: 89,
-        timestamp: '4h',
-        url: `https://instagram.com/p/sample2`
-      },
-      {
-        id: '3',
-        username: 'creative_artist',
-        avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1481662875992-05b0bddfae7c?w=300&h=300&fit=crop',
-        caption: `New artwork inspired by ${hashtag} 🎨 #art #creative`,
-        likes: 3421,
-        comments: 234,
-        timestamp: '6h',
-        url: `https://instagram.com/p/sample3`
-      },
-      {
-        id: '4',
-        username: 'food_lover',
-        avatar: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=300&h=300&fit=crop',
-        caption: `Delicious meal of the day! ${hashtag} #foodie #yummy`,
-        likes: 892,
-        comments: 45,
-        timestamp: '8h',
-        url: `https://instagram.com/p/sample4`
-      },
-      {
-        id: '5',
-        username: 'fitness_guru',
-        avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=300&h=300&fit=crop',
-        caption: `Morning workout complete! ${hashtag} #fitness #motivation`,
-        likes: 1567,
-        comments: 112,
-        timestamp: '12h',
-        url: `https://instagram.com/p/sample5`
-      },
-      {
-        id: '6',
-        username: 'fashion_style',
-        avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=50&h=50&fit=crop&crop=face',
-        image: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=300&h=300&fit=crop',
-        caption: `Today's outfit featuring ${hashtag} style 👗 #fashion #ootd`,
-        likes: 2103,
-        comments: 178,
-        timestamp: '1d',
-        url: `https://instagram.com/p/sample6`
+  // Fetch real Instagram posts from your backend API
+  const fetchInstagramPosts = async (hashtag) => {
+    try {
+      // Remove the # symbol if present
+      const cleanTag = hashtag.replace('#', '');
+      
+      const response = await fetch(`http://localhost:5000/hashtag/${cleanTag}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch posts: ${response.status}`);
       }
-    ];
-    return mockPosts;
+      
+      const data = await response.json();
+      
+      // Transform the data to match our component's expected format
+      return data.posts.map((post, index) => ({
+        id: index.toString(),
+        username: post.username,
+        avatar: post.avatarUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.username)}&background=random`,
+        imageUrl: post.imageUrl || 'https://images.unsplash.com/photo-1611095564141-d5b8a99a5b1e?w=300&h=300&fit=crop', // Fallback image
+        caption: post.caption,
+        likes: post.likes,
+        comments: post.comments,
+        timestamp: post.timestamp || 'Recently',
+        url: post.url
+      }));
+    } catch (error) {
+      console.error('Error fetching Instagram posts:', error);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -143,13 +99,18 @@ function TrendAnalyzer() {
     setSelectedHashtag(hashtag);
     setPostsLoading(true);
     setCurrentView('hashtag-posts');
+    setError("");
     
-    // Simulate API call delay
-    setTimeout(() => {
-      const posts = generateMockPosts(hashtag.tag);
+    try {
+      const posts = await fetchInstagramPosts(hashtag.tag);
       setInstagramPosts(posts);
+    } catch (err) {
+      console.error('Error fetching Instagram posts:', err);
+      setError(`Failed to load Instagram posts for ${hashtag.tag}. Please try again.`);
+      setInstagramPosts([]);
+    } finally {
       setPostsLoading(false);
-    }, 1000);
+    }
   };
 
   const handleBackToMain = () => {
@@ -238,8 +199,25 @@ function TrendAnalyzer() {
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-                <p className="text-slate-300">Loading Instagram posts...</p>
+                <p className="text-slate-300">Loading Instagram posts for {selectedHashtag?.tag}...</p>
               </div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-8 text-center">
+              <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
+              <p className="text-red-200 text-lg">{error}</p>
+              <button
+                onClick={() => handleHashtagClick(selectedHashtag)}
+                className="mt-4 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-6 py-2 rounded-lg transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : instagramPosts.length === 0 ? (
+            <div className="bg-slate-800/30 backdrop-blur-sm rounded-2xl p-8 text-center">
+              <Hash className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+              <p className="text-slate-300 text-lg">No posts found for {selectedHashtag?.tag}</p>
+              <p className="text-slate-400 text-sm mt-2">This hashtag might not have enough data or may not exist.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -263,11 +241,20 @@ function TrendAnalyzer() {
 
                   {/* Post Image */}
                   <div className="aspect-square bg-slate-800">
-                    <img
-                      src={post.image}
-                      alt="Instagram post"
-                      className="w-full h-full object-cover"
-                    />
+                    {post.imageUrl ? (
+                      <img
+                        src={`http://localhost:5000/proxy-image?url=${encodeURIComponent(post.imageUrl)}`}
+                        alt="Instagram post"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/300x300?text=Image+Unavailable';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-400">
+                        <Hash className="w-16 h-16" />
+                      </div>
+                    )}
                   </div>
 
                   {/* Post Content */}
@@ -290,36 +277,45 @@ function TrendAnalyzer() {
                     </p>
 
                     {/* View on Instagram Button */}
-                    <a
-                      href={post.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-300 text-sm"
-                    >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      View on Instagram
-                    </a>
+                    {post.url ? (
+                      <a
+                        href={post.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-300 text-sm"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        View on Instagram
+                      </a>
+                    ) : (
+                      <div className="flex items-center justify-center w-full bg-slate-600 text-slate-300 font-medium py-2 px-4 rounded-xl text-sm">
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Link unavailable
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-          )}
+                      )}
 
           {/* Note about data */}
-          <div className="mt-12 bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
-            <div className="flex items-start">
-              <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
-                <Eye className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <h4 className="text-lg font-semibold text-blue-200 mb-2">Demo Data</h4>
-                <p className="text-slate-300 text-sm leading-relaxed">
-                  These are sample Instagram posts for demonstration purposes. In a production app, 
-                  this would connect to the Instagram API to fetch real posts with the selected hashtag.
-                </p>
+          {instagramPosts.length > 0 && (
+            <div className="mt-12 bg-slate-800/30 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
+              <div className="flex items-start">
+                <div className="bg-blue-500/20 rounded-lg p-2 mr-4 flex-shrink-0">
+                  <Eye className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-blue-200 mb-2">Real Instagram Data</h4>
+                  <p className="text-slate-300 text-sm leading-relaxed">
+                    These are real Instagram posts fetched from your backend API for the hashtag {selectedHashtag?.tag}. 
+                    Posts are sorted by engagement (likes + comments) to show the most popular content.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -523,13 +519,9 @@ function TrendAnalyzer() {
                     <h3 className="text-2xl font-bold text-white">Strategy Suggestions</h3>
                   </div>
                   <ul className="list-disc list-inside space-y-2 text-slate-200 text-lg pl-2">
-                    {suggestions
-                      .flatMap((tip) =>
-                        tip.split(/\d+\.\s+/).filter(Boolean) // Split by "1. ", "2. ", etc.
-                      )
-                      .map((tip, idx) => (
-                        <li key={idx}>{tip.trim()}</li>
-                      ))}
+                    {suggestions.map((tip, idx) => (
+                      <li key={idx}>{tip.replace(/^\d+\.\s*/, "")}</li>
+                    ))}
                   </ul>
                 </div>
               )}
