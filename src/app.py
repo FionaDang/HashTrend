@@ -10,8 +10,8 @@ from io import BytesIO
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from huggingface_hub import InferenceClient
-from apify_scraper import run_and_fetch_sync
-from trend_analysis import compute_tf_idf_trends
+from src.apify_scraper import run_and_fetch_sync
+from src.trend_analysis import compute_tf_idf_trends
 from sentence_transformers import SentenceTransformer, util
 from concurrent.futures import ThreadPoolExecutor
 
