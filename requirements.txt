@@ -5,6 +5,5 @@ huggingface_hub
 python-dotenv
 pydantic
 sentence-transformers
-flask
-flask_cors
-gunicorn
+Flask==2.3.3
+Flask-CORS==4.0.0

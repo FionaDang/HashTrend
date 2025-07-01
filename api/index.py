@@ -1,4 +1,5 @@
 import os
+import sys
 import re
 import time
 import json
@@ -12,7 +13,7 @@ from pydantic import BaseModel
 from huggingface_hub import InferenceClient
 from sentence_transformers import SentenceTransformer, util
 from concurrent.futures import ThreadPoolExecutor
-
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 # ─── Load Local Modules ───────────────────────────────────────────────
 from src.apify_scraper import run_and_fetch_sync
 from src.trend_analysis import compute_tf_idf_trends
@@ -212,5 +213,5 @@ def get_hashtag_posts(tag):
         return jsonify({"error": "Failed to fetch posts"}), 500
 
 # ─── Entrypoint ────────────────────────────────────────────────────────
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+# if __name__ == "__main__":
+#     app.run()
