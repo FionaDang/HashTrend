@@ -31,7 +31,7 @@ client = InferenceClient(
 
 # ─── App Setup ─────────────────────────────────────────────────────────
 app = Flask(__name__)
-CORS(app, origins=["https://hashtrend.vercel.app"])  # ⬅ Allow frontend from Vercel only
+CORS(app, origins="*", methods=["GET", "POST"], allow_headers="*")
 
 # ─── Keyword Extraction ───────────────────────────────────────────────
 class KeywordResult(BaseModel):
