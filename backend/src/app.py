@@ -38,34 +38,69 @@ class KeywordResult(BaseModel):
     keywords: list[str]
 
 def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
-    full_prompt = (
-        f"You are an assistant. Extract {max_keywords} relevant keywords from the product description below.\n"
-        f"Respond only with a comma-separated list.\n\n"
-        f"Description: \"{prompt}\"\nKeywords:"
-    )
+    system_msg = {
+        "role": "system",
+        "content": (
+            f"You are an assistant. Extract {max_keywords} relevant keywords from a product description. "
+            f"Respond only with a comma-separated list."
+        )
+    }
+    user_msg = {
+        "role": "user",
+        "content": f"Description: \"{prompt}\"\nKeywords:"
+    }
+
     try:
-        response = client.text_generation(prompt=full_prompt, max_new_tokens=40, temperature=0.7)
-        text = response.strip()
-        print("🧪 Raw keyword response:", repr(text))
+        resp = client.chat.completions.create(
+            model=client.model,
+            messages=[system_msg, user_msg],
+            max_tokens=40,
+            temperature=0.7
+        )
+        text = resp.choices[0].message.content.strip()
+        if not text:
+            print("⚠️ Empty response")
+            return KeywordResult(keywords=[])
+        print("🧪 Raw response:", repr(text))
         return KeywordResult(keywords=[k.strip().lower() for k in text.split(",") if k.strip()])
     except Exception as e:
-        print("❌ Keyword extraction error:", e)
+        print("❌ LLaMA 3 API error:", e)
         traceback.print_exc()
         return KeywordResult(keywords=[])
-
-# ─── Strategy Suggestions ─────────────────────────────────────────────
-def generate_suggestions(prompt: str, keywords: list[str], trends: list[str], max_suggestions: int = 3) -> list[str]:
-    summary = ", ".join(f"#{tag}" for tag in trends)
-    full_prompt = (
+    
+# ─── Suggestion Generator Using Mixtral ────────────────────────────────
+def generate_suggestions(prompt: str, keywords: List[str], trends: List[str], max_suggestions: int = 3) -> List[str]:
+    trend_summary = ", ".join(f"#{t}" for t in trends)
+    user_prompt = (
         f"My content is about: {prompt}. "
         f"The extracted keywords are: {', '.join(keywords)}. "
-        f"The trending hashtags are: {summary}. "
+        f"The trending hashtags are: {trend_summary}. "
         f"Give {max_suggestions} short and clear strategic tips for making content that performs well in this niche. "
-        f"Respond as a list without explanations."
+        f"Respond as a numbered list without explanations."
     )
+
     try:
-        response = client.text_generation(prompt=full_prompt, max_new_tokens=120, temperature=0.7)
-        return [line.strip("•- ") for line in response.strip().split("\n") if line]
+        response = client.chat.completions.create(
+            model=client.model,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a creative strategist who gives concise, actionable suggestions to optimize content "
+                        "for social media performance."
+                    )
+                },
+                {
+                    "role": "user",
+                    "content": user_prompt
+                }
+            ],
+            max_tokens=120,
+            temperature=0.7
+        )
+
+        text = response.choices[0].message.content.strip()
+        return [line.lstrip("1234567890. ").strip("•- ") for line in text.split("\n") if line]
     except Exception as e:
         print("❌ Suggestion generation error:", e)
         traceback.print_exc()
