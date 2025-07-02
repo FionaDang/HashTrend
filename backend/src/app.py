@@ -69,7 +69,7 @@ def extract_keywords_llama(prompt: str, max_keywords: int = 3) -> KeywordResult:
         return KeywordResult(keywords=[])
     
 # ─── Suggestion Generator Using Mixtral ────────────────────────────────
-def generate_suggestions(prompt: str, keywords: List[str], trends: List[str], max_suggestions: int = 3) -> List[str]:
+def generate_suggestions(prompt: str, keywords: list[str], trends: list[str], max_suggestions: int = 3) -> list[str]:
     trend_summary = ", ".join(f"#{t}" for t in trends)
     user_prompt = (
         f"My content is about: {prompt}. "
