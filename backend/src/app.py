@@ -25,9 +25,8 @@ if not HF_TOKEN:
     raise ValueError("❌ HF_TOKEN missing in .env")
 
 client = InferenceClient(
-    model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-    token=HF_TOKEN,
-    provider="hf-inference"
+    model="HuggingFaceH4/zephyr-7b-beta",
+    token=HF_TOKEN
 )
 
 # ─── App Setup ─────────────────────────────────────────────────────────

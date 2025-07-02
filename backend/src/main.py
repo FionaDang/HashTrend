@@ -20,9 +20,8 @@ if not HF_TOKEN:
 
 # ─── Inference Client: Mixtral 8x7B on hf-inference ────────────────────
 client = InferenceClient(
-    model="mistralai/Mixtral-8x7B-Instruct-v0.1",
-    token=HF_TOKEN,
-    provider="hf-inference"
+    model="HuggingFaceH4/zephyr-7b-beta",
+    token=HF_TOKEN
 )
 
 # ─── Keyword Result Model ──────────────────────────────────────────────

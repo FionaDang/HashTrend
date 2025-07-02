@@ -12,7 +12,7 @@ if not HF_TOKEN:
     raise ValueError("❌ HF_TOKEN missing in .env")
 
 client = InferenceClient(
-    model="meta-llama/Meta-Llama-3-8B-Instruct",
+    model="HuggingFaceH4/zephyr-7b-beta",
     token=HF_TOKEN
 )
 
