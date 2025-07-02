@@ -18,9 +18,9 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 if not HF_TOKEN:
     raise ValueError("❌ HF_TOKEN missing in .env")
 
-# ─── Inference Client: Mixtral 8x7B on hf-inference ────────────────────
+# ─── Inference Client: Llama3 on hf-inference ────────────────────
 client = InferenceClient(
-    model="HuggingFaceH4/zephyr-7b-beta",
+    model="meta-llama/Meta-Llama-3-8B-Instruct",
     token=HF_TOKEN
 )
 
