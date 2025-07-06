@@ -32,7 +32,7 @@ function TrendAnalyzer() {
       // Remove the # symbol if present
       const cleanTag = hashtag.replace('#', '');
       
-      const response = await fetch(`https://hashtrend-server.onrender.com/hashtag/${cleanTag}`);
+      const response = await fetch(`http://localhost:5000/hashtag/${cleanTag}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch posts: ${response.status}`);
@@ -67,7 +67,7 @@ function TrendAnalyzer() {
     setError("");
 
     try {
-      const response = await fetch("https://hashtrend-server.onrender.com/analyze", {
+      const response = await fetch("http://localhost:5000/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
@@ -243,7 +243,7 @@ function TrendAnalyzer() {
                   <div className="aspect-square bg-slate-800">
                     {post.imageUrl ? (
                       <img
-                        src={`https://hashtrend-server.onrender.com/proxy-image?url=${encodeURIComponent(post.imageUrl)}`}
+                        src={`http://localhost:5000/proxy-image?url=${encodeURIComponent(post.imageUrl)}`}
                         alt="Instagram post"
                         className="w-full h-full object-cover"
                         onError={(e) => {
